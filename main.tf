@@ -1,8 +1,3 @@
-resource "docker_image" "honeypot_image" {
-	name		= "nginx:alpine"
-	keep_locally	= false
-}
-
 resource "docker_network" "deception_net" {
 	name = "honey_net"
 	ipam_config {
@@ -10,17 +5,23 @@ resource "docker_network" "deception_net" {
 	}
 }
 
-resource "docker_container" "honeypot_container" {
-	image = docker_image.honeypot_image.image_id
-	name  = "base_honey_node"
+resource "docker_container" "honeypot_cowrie" {
+  name    = "honeypot-cowrie"
+  image   = "cowrie/cowrie:latest"
+  restart = "unless-stopped"
 
-	networks_advanced {
-		name		= docker_network.deception_net.name
-		ipv4_address	= "10.10.10.5"
-	}
-	ports {
-		internal = 80
-		external = 8080
-	}
+  networks_advanced {
+    name         = docker_network.deception_net.name
+    ipv4_address = "10.10.10.2"
+  }
+
+  ports {
+    internal = 2222
+    external = 2222
+  }
+
+  volumes {
+    host_path      = "/home/aira/honeypot_data/cowrie/log"
+    container_path = "/cowrie/cowrie-env/var/log/cowrie"
+  }
 }
-
