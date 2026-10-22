@@ -6,5 +6,5 @@ terraform {
 	}
 }
 provider "docker" {
-	host = "unix:///var/run/docker.sock"
+	host = "ssh://aira@127.0.0.1"
 }
