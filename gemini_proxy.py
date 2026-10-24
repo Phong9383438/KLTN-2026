@@ -1,6 +1,7 @@
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
+from flask import Flask, request, jsonify
 
 # 1. Load environment variables from the .env file
 load_dotenv()
@@ -12,6 +13,9 @@ if not api_key:
 
 # 3. Configure the Gemini API
 genai.configure(api_key=api_key)
+
+# Initialize API Server
+app = Flask(__name__)
 
 def get_fake_response(attacker_command):
     """
@@ -25,13 +29,13 @@ def get_fake_response(attacker_command):
     If a command fails, print the standard bash error message.
     The current user is 'www-data'. The current directory is '/var/www/html'.
     """
-    
+
     # Initialize the model with the system prompt
     model = genai.GenerativeModel(
         model_name='gemini-3.6-flash',
         system_instruction=system_instruction
     )
-    
+
     # Generate and return the simulated terminal output
     try:
         response = model.generate_content(attacker_command)
@@ -39,9 +43,20 @@ def get_fake_response(attacker_command):
     except Exception as e:
         return f"bash: error processing command: {e}"
 
-# Internal testing block
+# 4. Define the API route to receive commands from the Cowrie Honeypot
+@app.route('/ask_ai', methods=['POST'])
+def handle_ask_ai():
+    # Extract the command entered by the attacker from the incoming JSON request
+    data = request.json
+    attacker_cmd = data.get('command', '')
+
+    # Process the command through the Gemini API
+    fake_output = get_fake_response(attacker_cmd)
+
+    # Package the simulated output into a JSON response for Cowrie to render
+    return jsonify({"fake_output": fake_output})
+
 if __name__ == "__main__":
-    test_cmd = "cat /etc/passwd"
-    print(f"Attacker executed: {test_cmd}")
-    print("-" * 30)
-    print(get_fake_response(test_cmd))
+    # Start the Flask server, binding it specifically to the Controller's Tailscale IP
+    print("Starting Gemini Proxy Server on Tailscale network...")
+    app.run(host='100.88.136.106', port=5000)

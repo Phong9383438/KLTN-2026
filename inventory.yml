@@ -1,4 +1,8 @@
 all:
-  hosts:
-    localhost:
-      ansible_connection: local
+  children:
+    edge_nodes:
+      hosts:
+        edge_pi:
+          ansible_host: 100.92.225.49
+          ansible_user: quan25
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'

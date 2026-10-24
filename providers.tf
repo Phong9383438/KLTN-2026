@@ -6,5 +6,5 @@ terraform {
 	}
 }
 provider "docker" {
-	host = "ssh://aira@127.0.0.1"
+	host = "ssh://${var.edge_node_user}@${var.edge_node_ip}"
 }

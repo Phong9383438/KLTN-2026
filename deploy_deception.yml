@@ -1,28 +1,37 @@
 ---
 - name: Execute Dynamic Deception Phase 1
-  hosts: localhost
-  connection: local
+  hosts: edge_nodes
+  gather_facts: no
   tasks:
     - name: Step 1 - Provision Honeypot via Terraform
+      delegate_to: localhost
       ansible.builtin.command:
         cmd: terraform apply -auto-approve
         chdir: /home/aira/kltn/edge-provisioning
       register: tf_result
 
-    - name: Step 2 - Get newly created Honeypot IP
+    - name: Step 2 - Sync OVS Redirect Script to Edge Node
+      ansible.builtin.copy:
+        src: /home/aira/kltn/edge-provisioning/ovs_redirect.py
+        dest: /tmp/ovs_redirect.py
+        mode: '0755'
+
+    - name: Step 3 - Get newly created Honeypot IP
       ansible.builtin.command:
         cmd: !unsafe "docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' honeypot-cowrie"
+      become: yes
       register: honeypot_ip_output
 
     - name: Set Honeypot IP variable
       ansible.builtin.set_fact:
         honeypot_ip: "{{ honeypot_ip_output.stdout }}"
 
-    - name: Step 3 - Execute Python OVS Redirect Script dynamically
+    - name: Step 4 - Execute Python OVS Redirect Script dynamically
       ansible.builtin.command:
-        cmd: "python3 /home/aira/kltn/edge-provisioning/ovs_redirect.py --attacker {{ attacker_ip }} --honeypot {{ honeypot_ip }} --port 2222"
+        cmd: "python3 /tmp/ovs_redirect.py --attacker {{ attacker_ip }} --honeypot {{ honeypot_ip }} --port 2222"
+      become: yes
       register: python_result
 
     - name: Debug Output
       ansible.builtin.debug:
-        msg: "Deception deployed! Traffic from {{ attacker_ip }} redirected to {{ honeypot_ip }}."
+        msg: "Deception deployed! Traffic from {{ attacker_ip }} redirected to {{ honeypot_ip }} on Edge Node."

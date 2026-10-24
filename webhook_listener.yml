@@ -4,12 +4,12 @@
   sources:
     - ansible.eda.webhook:
         host: 0.0.0.0
-        port: 5000
+        port: 5001
   rules:
     - name: Trigger Deception Flow on Attack
-      condition: event.payload.alert_type == "malicious_activity"
+      condition: event.payload.rule.level >= 7
       action:
         run_playbook:
-          name: deploy_deception.yml
+          name: /home/aira/kltn/edge-provisioning/deploy_deception.yml
           extra_vars:
-            attacker_ip: "{{ event.payload.attacker_ip }}"
+            attacker_ip: "{{ event.payload.srcip }}"
