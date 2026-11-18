@@ -22,7 +22,7 @@ echo "=================================================="
 # 1. CẬP NHẬT HỆ THỐNG & CÀI DOCKER, SURICATA
 echo "[1/6] Cài đặt các gói phụ thuộc, Suricata và Docker..."
 sudo apt-get update -y
-sudo apt-get install -y curl gnupg apt-transport-https lsb-release jq suricata docker.io docker-compose-v2
+sudo apt-get install -y curl gnupg apt-transport-https lsb-release jq suricata docker.io docker-compose
 
 sudo systemctl enable --now docker
 sudo usermod -aG docker $TARGET_USER || true
@@ -36,14 +36,16 @@ sudo systemctl restart suricata
 
 # 3. ĐỔI CỔNG SSH THẬT TỪ 22 SANG 22222 (NHƯỜNG PORT 22 CHO HONEYPOT)
 echo "[3/6] Cấu hình đổi cổng SSH thật sang 22222..."
-sudo sed -i 's/#Port 22/Port 22222/' /etc/ssh/sshd_config
-sudo sed -i 's/Port 22/Port 22222/' /etc/ssh/sshd_config
-sudo systemctl restart ssh || sudo systemctl restart sshd
+sudo sed -i '/^#*Port /d' /etc/ssh/sshd_config
+echo "Port 22222" | sudo tee -a /etc/ssh/sshd_config
+sudo systemctl disable --now ssh.socket 2>/dev/null || true
+sudo systemctl enable --now ssh.service
+sudo systemctl restart ssh.service
 
 # 4. TỰ ĐỘNG DỰNG COWRIE HONEYPOT BẰNG DOCKER COMPOSE
 echo "[4/6] Khởi tạo và kích hoạt Cowrie Honeypot..."
 mkdir -p "$HONEYPOT_DIR/cowrie-logs"
-touch "$HONEYPOT_DIR/cowrie-logs/cowrie.json"
+chmod 777 "$HONEYPOT_DIR/cowrie-logs"
 
 cat <<EOF > "$HONEYPOT_DIR/docker-compose.yml"
 version: '3.8'
@@ -60,15 +62,15 @@ services:
 EOF
 
 cd "$HONEYPOT_DIR"
-sudo docker compose down 2>/dev/null || true
-sudo docker compose up -d
+sudo docker-compose down 2>/dev/null || true
+sudo docker-compose up -d
 
 # 5. CÀI ĐẶT WAZUH AGENT
 echo "[5/6] Cài đặt Wazuh Agent..."
 curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | sudo gpg --dearmor -o /usr/share/keyrings/wazuh-keyring.gpg --yes
 echo "deb [signed-by=/usr/share/keyrings/wazuh-keyring.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | sudo tee /etc/apt/sources.list.d/wazuh.list
 sudo apt-get update -y
-sudo apt-get install -y wazuh-agent
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wazuh-agent
 
 # 6. CẤU HÌNH WAZUH AGENT ĐỘC LOG SURICATA & COWRIE
 echo "[6/6] Cấu hình ossec.conf để đọc eve.json và cowrie.json..."
