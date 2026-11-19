@@ -2,6 +2,8 @@
 - name: Execute Insider Threat Containment and Ticketing
   hosts: edge_nodes
   gather_facts: no
+  vars_files:
+    - /home/aira/kltn/edge-provisioning/secrets.yml
   vars:
     ticket_dir: /home/aira/kltn/edge-provisioning/tickets
   tasks:
@@ -37,3 +39,26 @@
     - name: Step 4 - Debug Containment Output
       ansible.builtin.debug:
         msg: "Insider threat contained! IP {{ attacker_ip }} dropped on br-edge and ticket created in {{ ticket_dir }}."
+
+    - name: Step 5 - Send Insider Threat Alert to Discord
+      delegate_to: localhost
+      ansible.builtin.uri:
+        url: "{{ discord_webhook_url }}"
+        method: POST
+        body_format: json
+        status_code: [200, 204]
+        body:
+          username: "Edge-SOAR Bot"
+          embeds:
+            - title: "CRITICAL: Insider Threat Contained"
+              color: 15158332
+              fields:
+                - name: "Source IP"
+                  value: "`{{ attacker_ip }}`"
+                  inline: true
+                - name: "Trigger"
+                  value: "Wazuh FIM (Rule 550/554 - Honeyfile Tampering)"
+                  inline: true
+                - name: "Action Taken"
+                  value: "Dropped traffic via OVS (`priority=200, actions=drop`) and generated Helpdesk JSON ticket."
+                  inline: false

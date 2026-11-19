@@ -2,6 +2,8 @@
 - name: Execute Dynamic Deception Phase 1
   hosts: edge_nodes
   gather_facts: no
+  vars_files:
+    - /home/aira/kltn/edge-provisioning/secrets.yml
   tasks:
     - name: Step 1 - Provision Honeypot via Terraform
       delegate_to: localhost
@@ -35,3 +37,26 @@
     - name: Debug Output
       ansible.builtin.debug:
         msg: "Deception deployed! Traffic from {{ attacker_ip }} redirected to {{ honeypot_ip }} on Edge Node."
+
+    - name: Step 5 - Send ChatOps Alert to Discord
+      delegate_to: localhost
+      ansible.builtin.uri:
+        url: "{{ discord_webhook_url }}"
+        method: POST
+        body_format: json
+        status_code: [200, 204]
+        body:
+          username: "Edge-SOAR Bot"
+          embeds:
+            - title: "ALERT! Dynamic Deception Activated (External Attack)"
+              color: 15105570
+              fields:
+                - name: "Attacker IP"
+                  value: "`{{ attacker_ip }}`"
+                  inline: true
+                - name: "Honeypot Target"
+                  value: "`{{ honeypot_ip }}:2222`"
+                  inline: true
+                - name: "Action Taken"
+                  value: "Terraform deployed Cowrie honeypot and OVS redirected traffic on `br-edge`."
+                  inline: false
