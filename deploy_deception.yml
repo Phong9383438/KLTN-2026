@@ -1,62 +1,110 @@
 ---
-- name: Execute Dynamic Deception Phase 1
+- name: Execute Dynamic Deception with CPU Guardrails
   hosts: edge_nodes
   gather_facts: no
   vars_files:
     - /home/aira/kltn/edge-provisioning/secrets.yml
+  vars:
+    cpu_threshold: 80
+
   tasks:
-    - name: Step 1 - Provision Honeypot via Terraform
-      delegate_to: localhost
-      ansible.builtin.command:
-        cmd: terraform apply -auto-approve
-        chdir: /home/aira/kltn/edge-provisioning
-      register: tf_result
+    # Measure current CPU usage on Raspberry Pi
+    - name: Guardrail Check - Measure Raspberry Pi CPU Usage
+      ansible.builtin.shell: "vmstat 1 2 | tail -1 | awk '{print 100 - $15}'"
+      register: cpu_check
+      changed_when: false
 
-    - name: Step 2 - Sync OVS Redirect Script to Edge Node
-      ansible.builtin.copy:
-        src: /home/aira/kltn/edge-provisioning/ovs_redirect.py
-        dest: /tmp/ovs_redirect.py
-        mode: '0755'
-
-    - name: Step 3 - Get newly created Honeypot IP
-      ansible.builtin.command:
-        cmd: !unsafe "docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' honeypot-cowrie"
-      become: yes
-      register: honeypot_ip_output
-
-    - name: Set Honeypot IP variable
+    - name: Set CPU Usage Fact
       ansible.builtin.set_fact:
-        honeypot_ip: "{{ honeypot_ip_output.stdout }}"
+        pi_cpu_usage: "{{ cpu_check.stdout | trim | int }}"
 
-    - name: Step 4 - Execute Python OVS Redirect Script dynamically
-      ansible.builtin.command:
-        cmd: "python3 /tmp/ovs_redirect.py --attacker {{ attacker_ip }} --honeypot {{ honeypot_ip }} --port 2222"
-      become: yes
-      register: python_result
-
-    - name: Debug Output
+    - name: Display Current Edge Node CPU Usage
       ansible.builtin.debug:
-        msg: "Deception deployed! Traffic from {{ attacker_ip }} redirected to {{ honeypot_ip }} on Edge Node."
+        msg: "Current Raspberry Pi CPU usage: {{ pi_cpu_usage }}% (Threshold: {{ cpu_threshold }}%)"
 
-    - name: Step 5 - Send ChatOps Alert to Discord
-      delegate_to: localhost
-      ansible.builtin.uri:
-        url: "{{ discord_webhook_url }}"
-        method: POST
-        body_format: json
-        status_code: [200, 204]
-        body:
-          username: "Edge-SOAR Bot"
-          embeds:
-            - title: "ALERT! Dynamic Deception Activated (External Attack)"
-              color: 15105570
-              fields:
-                - name: "Attacker IP"
-                  value: "`{{ attacker_ip }}`"
-                  inline: true
-                - name: "Honeypot Target"
-                  value: "`{{ honeypot_ip }}:2222`"
-                  inline: true
-                - name: "Action Taken"
-                  value: "Terraform deployed Cowrie honeypot and OVS redirected traffic on `br-edge`."
-                  inline: false
+    # Branch A: Normal mode (CPU <= 80%)
+    - name: Normal Mode - Deploy Honeypot and Redirect Traffic
+      when: pi_cpu_usage | int <= cpu_threshold
+      block:
+        - name: Step 1 - Provision Honeypot via Terraform
+          delegate_to: localhost
+          ansible.builtin.command:
+            cmd: terraform apply -auto-approve
+            chdir: /home/aira/kltn/edge-provisioning
+          register: tf_result
+
+        - name: Step 2 - Sync OVS Redirect Script to Edge Node
+          ansible.builtin.copy:
+            src: /home/aira/kltn/edge-provisioning/ovs_redirect.py
+            dest: /tmp/ovs_redirect.py
+            mode: '0755'
+
+        - name: Step 3 - Get newly created Honeypot IP
+          ansible.builtin.command:
+            cmd: !unsafe "docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' honeypot-cowrie"
+          become: yes
+          register: honeypot_ip_output
+
+        - name: Set Honeypot IP variable
+          ansible.builtin.set_fact:
+            honeypot_ip: "{{ honeypot_ip_output.stdout }}"
+
+        - name: Step 4 - Execute Python OVS Redirect Script dynamically
+          ansible.builtin.command:
+            cmd: "python3 /tmp/ovs_redirect.py --attacker {{ attacker_ip }} --honeypot {{ honeypot_ip }} --port 2222"
+          become: yes
+
+        - name: Step 5 - Send Deception Alert to Discord
+          delegate_to: localhost
+          ansible.builtin.uri:
+            url: "{{ discord_webhook_url }}"
+            method: POST
+            body_format: json
+            status_code: [200, 204]
+            body:
+              username: "Edge-SOAR Bot"
+              embeds:
+                - title: "ALERT: Dynamic Deception Activated (CPU: {{ pi_cpu_usage }}%)"
+                  color: 15105570
+                  fields:
+                    - name: "Attacker IP"
+                      value: "{{ attacker_ip }}"
+                      inline: true
+                    - name: "Honeypot Target"
+                      value: "{{ honeypot_ip }}:2222"
+                      inline: true
+                    - name: "Action Taken"
+                      value: "CPU within safe limits. Terraform deployed Cowrie and OVS redirected traffic."
+                      inline: false
+
+    # Branch B: Guardrail mode (CPU > 80%)
+    - name: Guardrail Mode - Halt Deception and Drop Attacker IP Directly
+      when: pi_cpu_usage | int > cpu_threshold
+      block:
+        - name: Guardrail Action - Block Attacker IP on OVS
+          ansible.builtin.command:
+            cmd: "ovs-ofctl add-flow br-edge priority=250,ip,nw_src={{ attacker_ip }},actions=drop"
+          become: yes
+
+        - name: Guardrail Alert - Send High CPU Protection Alert to Discord
+          delegate_to: localhost
+          ansible.builtin.uri:
+            url: "{{ discord_webhook_url }}"
+            method: POST
+            body_format: json
+            status_code: [200, 204]
+            body:
+              username: "Edge-SOAR Guardrail"
+              embeds:
+                - title: "GUARDRAIL TRIGGERED: High CPU ({{ pi_cpu_usage }}%)"
+                  color: 10038562
+                  fields:
+                    - name: "Blocked IP"
+                      value: "{{ attacker_ip }}"
+                      inline: true
+                    - name: "Edge Node CPU"
+                      value: "{{ pi_cpu_usage }}% (Threshold: {{ cpu_threshold }}%)"
+                      inline: true
+                    - name: "Action Taken"
+                      value: "Honeypot provisioning halted to protect Raspberry Pi. Attacker IP dropped on br-edge (priority=250)."
+                      inline: false
