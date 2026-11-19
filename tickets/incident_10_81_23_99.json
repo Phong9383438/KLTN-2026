@@ -1,0 +1,9 @@
+{
+  "ticket_id": "INC-INSIDER-10812399",
+  "severity": "CRITICAL",
+  "category": "Insider Threat - Honeyfile Tampering (Wazuh FIM 550/554)",
+  "source_ip": "10.81.23.99",
+  "target_node": "edge_pi (192.168.137.22)",
+  "action_taken": "Blocked via OVS OpenFlow rule (priority=200, actions=drop on br-edge)",
+  "status": "CONTAINED"
+}

@@ -1,0 +1,39 @@
+---
+- name: Execute Insider Threat Containment and Ticketing
+  hosts: edge_nodes
+  gather_facts: no
+  vars:
+    ticket_dir: /home/aira/kltn/edge-provisioning/tickets
+  tasks:
+    - name: Step 1 - Block Insider IP on Open vSwitch (br-edge)
+      ansible.builtin.command:
+        cmd: "ovs-ofctl add-flow br-edge priority=200,ip,nw_src={{ attacker_ip }},actions=drop"
+      become: yes
+      register: ovs_block_result
+
+    - name: Step 2 - Ensure local Helpdesk tickets directory exists
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "{{ ticket_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Step 3 - Generate Incident Helpdesk Ticket (JSON)
+      delegate_to: localhost
+      ansible.builtin.copy:
+        dest: "{{ ticket_dir }}/incident_{{ attacker_ip | replace('.', '_') }}.json"
+        content: |
+          {
+            "ticket_id": "INC-INSIDER-{{ attacker_ip | replace('.', '') }}",
+            "severity": "CRITICAL",
+            "category": "Insider Threat - Honeyfile Tampering (Wazuh FIM 550/554)",
+            "source_ip": "{{ attacker_ip }}",
+            "target_node": "edge_pi (192.168.137.22)",
+            "action_taken": "Blocked via OVS OpenFlow rule (priority=200, actions=drop on br-edge)",
+            "status": "CONTAINED"
+          }
+        mode: '0644'
+
+    - name: Step 4 - Debug Containment Output
+      ansible.builtin.debug:
+        msg: "Insider threat contained! IP {{ attacker_ip }} dropped on br-edge and ticket created in {{ ticket_dir }}."

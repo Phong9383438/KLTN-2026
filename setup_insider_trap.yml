@@ -1,0 +1,32 @@
+---
+- name: Phase 2 - Provision Insider Threat Trap (Honey-file)
+  hosts: edge_pi
+  become: yes
+  tasks:
+    - name: Step 1 - Create directory for decoy documents on Edge Node
+      ansible.builtin.file:
+        path: /opt/finance
+        state: directory
+        mode: '0755'
+
+    - name: Step 2 - Create Honey-file (Fake Salary Spreadsheet)
+      ansible.builtin.copy:
+        content: "ID,Name,Salary\n1,Director,50000000\n2,Manager,30000000\n"
+        dest: /opt/finance/bang_luong_2026.xlsx
+        mode: '0644'
+
+    - name: Step 3 - Configure Wazuh Agent FIM to monitor the decoy
+      ansible.builtin.blockinfile:
+        path: /var/ossec/etc/ossec.conf
+        insertbefore: "</ossec_config>"
+        marker: "<!-- {mark} ANSIBLE MANAGED BLOCK: INSIDER TRAP -->"
+        block: |
+          <syscheck>
+            <!-- Enable real-time monitoring on the decoy directory -->
+            <directories check_all="yes" realtime="yes" report_changes="yes">/opt/finance</directories>
+          </syscheck>
+
+    - name: Step 4 - Restart Wazuh Agent on Edge Node
+      ansible.builtin.systemd:
+        name: wazuh-agent
+        state: restarted

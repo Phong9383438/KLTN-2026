@@ -7,9 +7,18 @@
         port: 5001
   rules:
     - name: Trigger Deception Flow on Attack
-      condition: event.payload.rule.level >= 7
+      condition: event.payload.rule.level >= 10
       action:
         run_playbook:
           name: /home/aira/kltn/edge-provisioning/deploy_deception.yml
           extra_vars:
             attacker_ip: "{{ event.payload.srcip }}"
+
+    - name: Detect sensitive file access or modification
+      condition: event.payload.rule.id == "554" or event.payload.rule.id == "550"
+      action:
+        run_playbook:
+          name: /home/aira/kltn/edge-provisioning/insider_response.yml
+          extra_vars:
+            # Use default filter in case FIM event lacks source IP
+            attacker_ip: "{{ event.payload.srcip | default('10.81.23.99') }}"

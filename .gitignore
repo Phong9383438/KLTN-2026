@@ -2,3 +2,17 @@
 *.tfstate
 *.tfstate.backup
 .env
+# Python virtual environment & cache
+venv/
+__pycache__/
+*.pyc
+
+# Terraform binaries & state files
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# OS & temporary files
+*.log
+.DS_Store

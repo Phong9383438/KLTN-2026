@@ -1,0 +1,25 @@
+<group name="local,cowrie,honeypot,">
+  <rule id="100100" level="10">
+    <decoded_as>json</decoded_as>
+    <field name="eventid">^cowrie\.</field>
+    <description>Cowrie Honeypot Activity: $(eventid) from $(src_ip)</description>
+  </rule>
+  <rule id="100101" level="12">
+    <if_sid>100100</if_sid>
+    <field name="eventid">^cowrie\.login\.success$</field>
+    <description>CRITICAL: Attacker logged into Cowrie Honeypot from $(src_ip)</description>
+  </rule>
+  <rule id="100102" level="12">
+    <if_sid>100100</if_sid>
+    <field name="eventid">^cowrie\.command\.input$</field>
+    <description>CRITICAL: Attacker ran command [$(input)] inside Honeypot</description>
+  </rule>
+</group>
+
+<group name="local,suricata,ids,">
+  <rule id="100200" level="10">
+    <if_sid>86601</if_sid>
+    <field name="alert.signature">SCAN</field>
+    <description>HIGH: Suricata Scan Detected - $(alert.signature) from $(src_ip)</description>
+  </rule>
+</group>

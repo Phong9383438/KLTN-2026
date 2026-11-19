@@ -1,3 +1,3 @@
-docker_host = "ssh://quan25@100.92.225.49"
-edge_node_user = "quan25"
-edge_node_ip   = "100.92.225.49"
+docker_host    = "ssh://admin@192.168.137.22:22222"
+edge_node_user = "admin"
+edge_node_ip   = "192.168.137.22"

@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+import sys
+import json
+import urllib.request
+
+alert_file = sys.argv[1]
+hook_url = sys.argv[3]
+
+with open(alert_file, "r") as f:
+    alert_data = json.load(f)
+
+# Normalize srcip to top-level for webhook_listener.yml
+data = alert_data.get("data", {})
+src_ip = alert_data.get("srcip") or data.get("src_ip") or data.get("srcip")
+if src_ip:
+    alert_data["srcip"] = src_ip
+
+req = urllib.request.Request(
+    hook_url,
+    data=json.dumps(alert_data).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST"
+)
+
+try:
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        pass
+except Exception as e:
+    sys.stderr.write(f"Webhook error: {e}\n")

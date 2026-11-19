@@ -21,7 +21,7 @@ resource "docker_container" "honeypot_cowrie" {
   }
 
   volumes {
-    host_path      = "/home/aira/honeypot_data/cowrie/log"
+    host_path      = "/home/admin/honeypot_data/cowrie/log"
     container_path = "/cowrie/cowrie-env/var/log/cowrie"
   }
 }
